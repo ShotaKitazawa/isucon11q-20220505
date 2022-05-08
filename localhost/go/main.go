@@ -252,7 +252,7 @@ func main() {
 		e.Logger.Fatalf("failed to connect db: %v", err)
 		return
 	}
-	db.SetMaxOpenConns(10)
+	db.SetMaxOpenConns(1000)
 	defer db.Close()
 
 	postIsuConditionTargetBaseURL = os.Getenv("POST_ISUCONDITION_TARGET_BASE_URL")
@@ -261,8 +261,39 @@ func main() {
 		return
 	}
 
+	if err := initializeWarmCache(); err != nil {
+		panic(err)
+	}
+
 	serverPort := fmt.Sprintf(":%v", getEnv("SERVER_APP_PORT", "3000"))
 	e.Logger.Fatal(e.Start(serverPort))
+}
+
+func initializeWarmCache() error {
+	isuList := []Isu{}
+	// get all images
+	err := db.Select(&isuList, "SELECT `jia_isu_uuid`,`jia_user_id`,`image` FROM `isu`")
+	if err != nil {
+		return err
+	}
+	for _, isu := range isuList {
+		f, err := os.Create(`/home/isucon/webapp/images/` + isu.JIAIsuUUID + "_" + isu.JIAUserID)
+		if err != nil {
+			return err
+		}
+		image := isu.Image
+		if len(image) == 0 {
+			image, err = ioutil.ReadFile(defaultIconFilePath)
+			if err != nil {
+				return err
+			}
+		}
+		if _, err := f.Write(image); err != nil {
+			panic(err)
+		}
+		f.Close()
+	}
+	return nil
 }
 
 func getSession(r *http.Request) (*sessions.Session, error) {
@@ -336,6 +367,10 @@ func postInitialize(c echo.Context) error {
 	)
 	if err != nil {
 		c.Logger().Errorf("db error : %v", err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+
+	if err := initializeWarmCache(); err != nil {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
@@ -585,8 +620,8 @@ func postIsu(c echo.Context) error {
 	defer tx.Rollback()
 
 	_, err = tx.Exec("INSERT INTO `isu`"+
-		"	(`jia_isu_uuid`, `name`, `image`, `jia_user_id`) VALUES (?, ?, ?, ?)",
-		jiaIsuUUID, isuName, image, jiaUserID)
+		"	(`jia_isu_uuid`, `name`, `jia_user_id`) VALUES (?, ?, ?)",
+		jiaIsuUUID, isuName, jiaUserID)
 	if err != nil {
 		mysqlErr, ok := err.(*mysql.MySQLError)
 
@@ -655,6 +690,19 @@ func postIsu(c echo.Context) error {
 	}
 
 	err = tx.Commit()
+
+	// create Isu Image
+	f, err := os.Create(`/home/isucon/webapp/images/` + jiaIsuUUID + "_" + jiaUserID)
+	if err != nil {
+		c.Logger().Errorf("create file error: %v", err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+	defer f.Close()
+	if _, err := f.Write(image); err != nil {
+		c.Logger().Errorf("create file error: %v", err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+
 	if err != nil {
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
@@ -708,18 +756,16 @@ func getIsuIcon(c echo.Context) error {
 
 	jiaIsuUUID := c.Param("jia_isu_uuid")
 
-	var image []byte
-	err = db.Get(&image, "SELECT `image` FROM `isu` WHERE `jia_user_id` = ? AND `jia_isu_uuid` = ?",
-		jiaUserID, jiaIsuUUID)
+	imageFilepath := `/home/isucon/webapp/images/` + jiaIsuUUID + "_" + jiaUserID
+	if _, err := os.Stat(imageFilepath); err != nil {
+		return c.String(http.StatusNotFound, "not found: isu")
+	}
+	image, err := os.ReadFile(imageFilepath)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return c.String(http.StatusNotFound, "not found: isu")
-		}
-
-		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
+	c.Response().Header().Set(echo.HeaderContentType, "image/jpeg")
 	return c.Blob(http.StatusOK, "", image)
 }
 
