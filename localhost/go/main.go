@@ -261,29 +261,31 @@ func main() {
 		return
 	}
 
-	initializeWarmCache()
+	if err := initializeWarmCache(); err != nil {
+		panic(err)
+	}
 
 	serverPort := fmt.Sprintf(":%v", getEnv("SERVER_APP_PORT", "3000"))
 	e.Logger.Fatal(e.Start(serverPort))
 }
 
-func initializeWarmCache() {
+func initializeWarmCache() error {
 	isuList := []Isu{}
 	// get all images
 	err := db.Select(&isuList, "SELECT `jia_isu_uuid`,`jia_user_id`,`image` FROM `isu`")
 	if err != nil {
-		panic(err)
+		return err
 	}
 	for _, isu := range isuList {
 		f, err := os.Create(`/home/isucon/webapp/images/` + isu.JIAIsuUUID + "_" + isu.JIAUserID)
 		if err != nil {
-			panic(err)
+			return err
 		}
 		image := isu.Image
 		if len(image) == 0 {
 			image, err = ioutil.ReadFile(defaultIconFilePath)
 			if err != nil {
-				panic(err)
+				return err
 			}
 		}
 		if _, err := f.Write(image); err != nil {
@@ -291,6 +293,7 @@ func initializeWarmCache() {
 		}
 		f.Close()
 	}
+	return nil
 }
 
 func getSession(r *http.Request) (*sessions.Session, error) {
@@ -364,6 +367,10 @@ func postInitialize(c echo.Context) error {
 	)
 	if err != nil {
 		c.Logger().Errorf("db error : %v", err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+
+	if err := initializeWarmCache(); err != nil {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
