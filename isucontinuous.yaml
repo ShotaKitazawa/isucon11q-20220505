@@ -27,6 +27,8 @@ hosts:
       compile: /home/isucon/local/go/bin/go build .
     - src: sql
       target: /home/isucon/webapp/sql
+    - src: envfile
+      target: /home/isucon/env.sh
 
   profiling: &profiling
     command: >-
