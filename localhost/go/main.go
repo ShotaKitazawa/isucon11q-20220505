@@ -1203,23 +1203,27 @@ func postIsuCondition(c echo.Context) error {
 		return c.String(http.StatusNotFound, "not found: isu")
 	}
 
+	var values []string
 	for _, cond := range req {
-		timestamp := time.Unix(cond.Timestamp, 0)
-
 		if !isValidConditionFormat(cond.Condition) {
 			return c.String(http.StatusBadRequest, "bad request body")
 		}
 
-		_, err = tx.Exec(
-			"INSERT INTO `isu_condition`"+
-				"	(`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `message`)"+
-				"	VALUES (?, ?, ?, ?, ?)",
-			jiaIsuUUID, timestamp, cond.IsSitting, cond.Condition, cond.Message)
-		if err != nil {
-			c.Logger().Errorf("db error: %v", err)
-			return c.NoContent(http.StatusInternalServerError)
+		timestampStr := time.Unix(cond.Timestamp, 0).Format("2006-01-02 15:04:05")
+		isSittingNum := 0
+		if cond.IsSitting {
+			isSittingNum = 1
 		}
+		values = append(values, fmt.Sprintf(`("%s", "%s", %d, "%s", "%s")`, jiaIsuUUID, timestampStr, isSittingNum, cond.Condition, cond.Message))
+	}
 
+	_, err = tx.Exec(
+		"INSERT INTO `isu_condition`" +
+			"	(`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `message`)" +
+			"	VALUES " + strings.Join(values, ","))
+	if err != nil {
+		c.Logger().Errorf("db error: %v", err)
+		return c.NoContent(http.StatusInternalServerError)
 	}
 
 	err = tx.Commit()
