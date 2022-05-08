@@ -11,7 +11,7 @@ hosts:
 - host: isucondition-1.t.isucon.dev
   user: &user root
   key: &key /root/.ssh/id_rsa
-  deploy: &deploy
+  deploy:
     pre_command: >-
       rm -f "{{.Env.ACCESSLOG_PATH}}";
     post_command: >-
@@ -37,10 +37,19 @@ hosts:
       fi;
       cat "{{.Env.ACCESSLOG_PATH}}" | alp ltsv -m "/api/condition/.+,/api/isu/.+/graph,/api/isu/.+/icon,/api/isu/.+" --sort sum -r > /profile/{{.Git.Revision}}/accesslog;
 
+
 - host: isucondition-2.t.isucon.dev
   user: *user
   key: *key
-  deploy: *deploy
+  deploy:
+    post_command: >-
+      sleep 10 && sudo systemctl restart isucondition.go.service
+    targets:
+    - src: go
+      target: /home/isucon/webapp/go
+      compile: /home/isucon/local/go/bin/go build .
+    - src: envfile
+      target: /home/isucon/env.sh
   profiling: *profiling
   after_bench:
     target: /profile/{{.Git.Revision}}/
@@ -50,7 +59,7 @@ hosts:
       if [ -f "/pprof/{{.Git.Revision}}/$PPROF_FILENAME" ]; then
         /home/isucon/local/go/bin/go tool pprof -top -cum /pprof/{{.Git.Revision}}/$PPROF_FILENAME > /profile/{{.Git.Revision}}/pprof_top_cum;
       fi;
-      cat "{{.Env.ACCESSLOG_PATH}}" | alp ltsv -m "/api/condition/.+,/api/isu/.+/graph,/api/isu/.+/icon,/api/isu/.+" --sort sum -r > /profile/{{.Git.Revision}}/accesslog;
+
 
 - host: isucondition-3.t.isucon.dev
   user: *user
