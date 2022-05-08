@@ -15,7 +15,7 @@ hosts:
     pre_command: >-
       rm -f "{{.Env.ACCESSLOG_PATH}}";
     post_command: >-
-      sudo systemctl restart nginx && sleep 5 && sudo systemctl restart isucondition.go.service
+      sudo systemctl restart nginx && sleep 10 && sudo systemctl restart isucondition.go.service
     targets:
     - src: nginx
       target: /etc/nginx
