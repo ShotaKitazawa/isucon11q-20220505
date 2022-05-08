@@ -1086,13 +1086,15 @@ func getIsuConditionsFromDB(db *sqlx.DB, jiaIsuUUID string, endTime time.Time, c
 	var query string
 	var args []interface{}
 
+	arg := map[string]interface{}{
+		"jia_isu_uuid":    jiaIsuUUID,
+		"start_time":      startTime,
+		"end_time":        endTime,
+		"condition_level": conditionLevel,
+		"limit":           limit,
+	}
 	if startTime.IsZero() {
-		arg := map[string]interface{}{
-			"end_time":        endTime,
-			"condition_level": conditionLevel,
-			"limit":           limit,
-		}
-		query, args, err = sqlx.Named("SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ?"+
+		query, args, err = sqlx.Named("SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = :jia_isu_uuid"+
 			"	AND `timestamp` < :end_time"+
 			"	AND `condition_level` IN(:condition_level)"+
 			"	ORDER BY `timestamp` DESC"+
@@ -1105,13 +1107,7 @@ func getIsuConditionsFromDB(db *sqlx.DB, jiaIsuUUID string, endTime time.Time, c
 			return nil, fmt.Errorf("query builder error: %v", err)
 		}
 	} else {
-		arg := map[string]interface{}{
-			"start_time":      startTime,
-			"end_time":        endTime,
-			"condition_level": conditionLevel,
-			"limit":           limit,
-		}
-		query, args, err = sqlx.Named("SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ?"+
+		query, args, err = sqlx.Named("SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = :jia_isu_uuid"+
 			"	AND `timestamp` < :end_time"+
 			"	AND :start_time <= `timestamp`"+
 			"	AND `condition_level` IN(:condition_level)"+
