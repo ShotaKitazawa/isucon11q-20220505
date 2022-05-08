@@ -270,9 +270,13 @@ func main() {
 }
 
 func initializeWarmCache() error {
+	tx, err := db.Beginx()
+	if err != nil {
+		panic(err)
+	}
 	isuList := []Isu{}
 	// get all images
-	err := db.Select(&isuList, "SELECT `jia_isu_uuid`,`jia_user_id`,`image` FROM `isu`")
+	err = tx.Select(&isuList, "SELECT `jia_isu_uuid`,`jia_user_id`,`image` FROM `isu`")
 	if err != nil {
 		return err
 	}
@@ -293,6 +297,24 @@ func initializeWarmCache() error {
 		}
 		f.Close()
 	}
+	// set condition_level to `isu_condition`
+	conditions := []IsuCondition{}
+	if err = tx.Select(&conditions, "SELECT * FROM `isu_condition`"); err != nil {
+		panic(err)
+	}
+	for _, cond := range conditions {
+		cLevel, err := calculateConditionLevel(cond.Condition)
+		if err != nil {
+			panic(err)
+		}
+		if _, err = tx.Exec("UPDATE `isu_condition` SET condition_level = ? WHERE id = ?", cLevel, cond.ID); err != nil {
+			panic(err)
+		}
+	}
+	if err = tx.Commit(); err != nil {
+		panic(err)
+	}
+
 	return nil
 }
 
@@ -1260,12 +1282,17 @@ func postIsuCondition(c echo.Context) error {
 		if cond.IsSitting {
 			isSittingNum = 1
 		}
-		values = append(values, fmt.Sprintf(`("%s", "%s", %d, "%s", "%s")`, jiaIsuUUID, timestampStr, isSittingNum, cond.Condition, cond.Message))
+		conditionLevel, err := calculateConditionLevel(cond.Condition)
+		if err != nil {
+			// invalid condition
+			continue
+		}
+		values = append(values, fmt.Sprintf(`("%s", "%s", %d, "%s", "%s", "%s")`, jiaIsuUUID, timestampStr, isSittingNum, cond.Condition, conditionLevel, cond.Message))
 	}
 
 	_, err = tx.Exec(
 		"INSERT INTO `isu_condition`" +
-			"	(`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `message`)" +
+			"	(`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`)" +
 			"	VALUES " + strings.Join(values, ","))
 	if err != nil {
 		c.Logger().Errorf("db error: %v", err)
