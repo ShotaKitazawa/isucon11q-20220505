@@ -1159,19 +1159,41 @@ func calculateConditionLevel(condition string) (string, error) {
 // GET /api/trend
 // ISUの性格毎の最新のコンディション情報
 func getTrend(c echo.Context) error {
-	characterList := []Isu{}
-	err := db.Select(&characterList, "SELECT `character` FROM `isu` GROUP BY `character`")
+	isuList := []struct {
+		JIAIsuUUID string    `db:"jia_isu_uuid"`
+		Timestamp  time.Time `db:"timestamp"`
+		Character  string    `json:"character"`
+	}{}
+
+	err := db.Select(&isuList, `
+SELECT e.jia_isu_uuid, e.timestamp, i.character
+FROM (
+  SELECT jia_isu_uuid, timestamp, ROW_NUMBER() OVER (
+    PARTITION BY jia_isu_uuid ORDER BY timestamp DESC
+  ) AS rank
+  FROM isu_condition
+) AS e
+JOIN isu AS i ON e.jia_isu_uuid = i.jia_isu_uuid
+WHERE rank = 1
+ORDER BY e.timestamp`)
 	if err != nil {
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	res := []TrendResponse{}
+	var respBase map[string][]IsuCondition = make(map[string][]IsuCondition)
+	for _, isu := range isuList {
+		respBase[isu.Character] = append(respBase[isu.Character], IsuCondition{
+			JIAIsuUUID: isu.JIAIsuUUID,
+			Timestamp:  isu.Timestamp,
+		})
+	}
 
+	/*
 	for _, character := range characterList {
 		isuList := []Isu{}
 		err = db.Select(&isuList,
-			"SELECT * FROM `isu` WHERE `character` = ?",
+			"SELECT i.*,c.* FROM `isu` i JOIN `isu_condition` c ON i.jia_isu_uuid = c.jia_isu_uuid WHERE `character` = ?",
 			character.Character,
 		)
 		if err != nil {
@@ -1185,7 +1207,7 @@ func getTrend(c echo.Context) error {
 		for _, isu := range isuList {
 			conditions := []IsuCondition{}
 			err = db.Select(&conditions,
-				"SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ? ORDER BY timestamp DESC",
+				"SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ? ORDER BY timestamp DESC LIMIT 1",
 				isu.JIAIsuUUID,
 			)
 			if err != nil {
@@ -1233,6 +1255,7 @@ func getTrend(c echo.Context) error {
 				Critical:  characterCriticalIsuConditions,
 			})
 	}
+	*/
 
 	return c.JSON(http.StatusOK, res)
 }
