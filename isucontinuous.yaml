@@ -1,0 +1,56 @@
+setup:
+  docker:
+    netdata:
+      version: latest
+      public_port: 19999
+  alp:
+    version: v1.0.8
+slack:
+  default_channel_id: "C012BGJSJMC"
+hosts:
+- host: isucondition-1.t.isucon.dev
+  user: &user root
+  key: &key /root/.ssh/id_rsa
+  deploy: &deploy
+    pre_command: >-
+      rm -f "{{.Env.ACCESSLOG_PATH}}";
+      rm -f "{{.Env.SLOWLOG_PATH}}";
+    post_command: >-
+      sudo systemctl restart mysql nginx && sudo systemctl restart isucondition.go.service
+    targets:
+    - src: nginx
+      target: /etc/nginx
+    - src: mysql
+      target: /etc/mysql
+    - src: go
+      target: /home/isucon/webapp/go
+      compile: /home/isucon/local/go/bin/go build .
+  profiling: &profiling
+    command: >-
+      PPROF_TMPDIR=/pprof/{{.Git.Revision}} /home/isucon/local/go/bin/go tool pprof /home/isucon/webapp/go/isucondition http://localhost:6060/debug/pprof/profile?seconds=90
+    #command: >-
+    #  PPROF_TMPDIR=/pprof/{{.Git.Revision}} /home/isucon/local/go/bin/go tool pprof /home/isucon/webapp/go/isucondition http://localhost:6060/debug/fgprof?seconds=90
+  after_bench: &after_bench
+    target: /profile/{{.Git.Revision}}/
+    command: >-
+      mkdir -p /profile/{{.Git.Revision}};
+      PPROF_FILENAME=$(ls /root/pprof/tmp/ -tr | tail -n1);
+      if [ -f "/root/pprof/tmp/$PPROF_FILENAME" ]; then
+        /home/isucon/local/go/bin/go tool pprof -top -cum /root/pprof/tmp/$PPROF_FILENAME > /profile/{{.Git.Revision}}/pprof_top_cum;
+      fi;
+      cat "{{.Env.ACCESSLOG_PATH}}" | alp ltsv -r --sort sum > /profile/{{.Git.Revision}}/accesslog;
+      cat "{{.Env.SLOWLOG_PATH}}" | docker run -i --rm matsuu/pt-query-digest > /profile/{{.Git.Revision}}/slowlog;
+
+- host: isucondition-2.t.isucon.dev
+  user: *user
+  key: *key
+  deploy: *deploy
+  profiling: *profiling
+  after_bench: *after_bench
+
+- host: isucondition-3.t.isucon.dev
+  user: *user
+  key: *key
+  deploy: *deploy
+  profiling: *profiling
+  after_bench: *after_bench
