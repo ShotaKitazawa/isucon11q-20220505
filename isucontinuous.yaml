@@ -29,10 +29,8 @@ hosts:
       target: /home/isucon/webapp/sql
 
   profiling: &profiling
-    #command: >-
-    #  PPROF_TMPDIR=/pprof/{{.Git.Revision}} /home/isucon/local/go/bin/go tool pprof /home/isucon/webapp/go/isucondition http://localhost:6060/debug/pprof/profile?seconds=90
     command: >-
-      PPROF_TMPDIR=/pprof/{{.Git.Revision}} /home/isucon/local/go/bin/go tool pprof /home/isucon/webapp/go/isucondition http://localhost:6060/debug/fgprof?seconds=90
+      PPROF_TMPDIR=/pprof/{{.Git.Revision}} /home/isucon/local/go/bin/go tool pprof /home/isucon/webapp/go/isucondition http://localhost:6060/debug/pprof/profile?seconds=90
   after_bench:
     target: /profile/{{.Git.Revision}}/
     command: >-
