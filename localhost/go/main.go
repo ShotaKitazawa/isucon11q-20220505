@@ -271,13 +271,9 @@ func main() {
 }
 
 func initializeWarmCache() error {
-	tx, err := db.Beginx()
-	if err != nil {
-		panic(err)
-	}
 	isuList := []Isu{}
 	// get all images
-	err = tx.Select(&isuList, "SELECT `jia_isu_uuid`,`jia_user_id`,`image` FROM `isu`")
+	err := db.Select(&isuList, "SELECT `jia_isu_uuid`,`jia_user_id`,`image` FROM `isu`")
 	if err != nil {
 		return err
 	}
@@ -300,7 +296,7 @@ func initializeWarmCache() error {
 	}
 	// set condition_level to `isu_condition`
 	conditions := []IsuCondition{}
-	if err = tx.Select(&conditions, "SELECT * FROM `isu_condition`"); err != nil {
+	if err = db.Select(&conditions, "SELECT * FROM `isu_condition`"); err != nil {
 		panic(err)
 	}
 	for _, cond := range conditions {
@@ -308,12 +304,9 @@ func initializeWarmCache() error {
 		if err != nil {
 			panic(err)
 		}
-		if _, err = tx.Exec("UPDATE `isu_condition` SET condition_level = ? WHERE id = ?", cLevel, cond.ID); err != nil {
+		if _, err = db.Exec("UPDATE `isu_condition` SET condition_level = ? WHERE id = ?", cLevel, cond.ID); err != nil {
 			panic(err)
 		}
-	}
-	if err = tx.Commit(); err != nil {
-		panic(err)
 	}
 
 	return nil
