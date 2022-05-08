@@ -14,22 +14,16 @@ hosts:
   deploy: &deploy
     pre_command: >-
       rm -f "{{.Env.ACCESSLOG_PATH}}";
-      rm -f "{{.Env.SLOWLOG_PATH}}";
     post_command: >-
-      sudo systemctl restart mysql nginx && sudo systemctl restart isucondition.go.service
+      sudo systemctl restart nginx && sleep 5 && sudo systemctl restart isucondition.go.service
     targets:
     - src: nginx
       target: /etc/nginx
-    - src: mysql
-      target: /etc/mysql
     - src: go
       target: /home/isucon/webapp/go
       compile: /home/isucon/local/go/bin/go build .
-    - src: sql
-      target: /home/isucon/webapp/sql
     - src: envfile
       target: /home/isucon/env.sh
-
   profiling: &profiling
     command: >-
       PPROF_TMPDIR=/pprof/{{.Git.Revision}} /home/isucon/local/go/bin/go tool pprof /home/isucon/webapp/go/isucondition http://localhost:6060/debug/pprof/profile?seconds=90
@@ -42,7 +36,6 @@ hosts:
         /home/isucon/local/go/bin/go tool pprof -top -cum /pprof/{{.Git.Revision}}/$PPROF_FILENAME > /profile/{{.Git.Revision}}/pprof_top_cum;
       fi;
       cat "{{.Env.ACCESSLOG_PATH}}" | alp ltsv -m "/api/condition/.+,/api/isu/.+/graph,/api/isu/.+/icon,/api/isu/.+" --sort sum -r > /profile/{{.Git.Revision}}/accesslog;
-      cat "{{.Env.SLOWLOG_PATH}}" | docker run -i --rm matsuu/pt-query-digest > /profile/{{.Git.Revision}}/slowlog;
 
 - host: isucondition-2.t.isucon.dev
   user: *user
@@ -51,24 +44,31 @@ hosts:
   profiling: *profiling
   after_bench:
     target: /profile/{{.Git.Revision}}/
-    #command: >-
-    #  mkdir -p /profile/{{.Git.Revision}};
-    #  export PPROF_FILENAME=$(ls /pprof/{{.Git.Revision}}/ -tr | tail -n1);
-    #  if [ -f "/pprof/{{.Git.Revision}}/$PPROF_FILENAME" ]; then
-    #    /home/isucon/local/go/bin/go tool pprof -top -cum /pprof/{{.Git.Revision}}/$PPROF_FILENAME > /profile/{{.Git.Revision}}/pprof_top_cum;
-    #  fi;
+    command: >-
+      mkdir -p /profile/{{.Git.Revision}};
+      export PPROF_FILENAME=$(ls /pprof/{{.Git.Revision}}/ -tr | tail -n1);
+      if [ -f "/pprof/{{.Git.Revision}}/$PPROF_FILENAME" ]; then
+        /home/isucon/local/go/bin/go tool pprof -top -cum /pprof/{{.Git.Revision}}/$PPROF_FILENAME > /profile/{{.Git.Revision}}/pprof_top_cum;
+      fi;
+      cat "{{.Env.ACCESSLOG_PATH}}" | alp ltsv -m "/api/condition/.+,/api/isu/.+/graph,/api/isu/.+/icon,/api/isu/.+" --sort sum -r > /profile/{{.Git.Revision}}/accesslog;
 
 - host: isucondition-3.t.isucon.dev
   user: *user
   key: *key
-  deploy: *deploy
-  profiling: *profiling
+  deploy:
+    pre_command: >-
+      rm -f "{{.Env.ACCESSLOG_PATH}}";
+    post_command: >-
+      sudo systemctl restart mysql
+    targets:
+    - src: mysql
+      target: /etc/mysql
+    - src: envfile
+      target: /home/isucon/env.sh
   after_bench:
     target: /profile/{{.Git.Revision}}/
-    #command: >-
-    #  mkdir -p /profile/{{.Git.Revision}};
-    #  export PPROF_FILENAME=$(ls /pprof/{{.Git.Revision}}/ -tr | tail -n1);
-    #  if [ -f "/pprof/{{.Git.Revision}}/$PPROF_FILENAME" ]; then
-    #    /home/isucon/local/go/bin/go tool pprof -top -cum /pprof/{{.Git.Revision}}/$PPROF_FILENAME > /profile/{{.Git.Revision}}/pprof_top_cum;
-    #  fi;
+    command: >-
+      mkdir -p /profile/{{.Git.Revision}};
+      cat "{{.Env.SLOWLOG_PATH}}" | docker run -i --rm matsuu/pt-query-digest > /profile/{{.Git.Revision}}/slowlog;
+
 
