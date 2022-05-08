@@ -1083,27 +1083,50 @@ func getIsuConditionsFromDB(db *sqlx.DB, jiaIsuUUID string, endTime time.Time, c
 
 	conditions := []IsuCondition{}
 	var err error
+	var query string
+	var args []interface{}
 
 	if startTime.IsZero() {
-		err = db.Select(&conditions,
-			"SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ?"+
-				"	AND `timestamp` < ?"+
-				"	AND `condition_level` IN(?)"+
-				"	ORDER BY `timestamp` DESC"+
-				"	LIMIT ?",
-			jiaIsuUUID, endTime, strings.Join(conditionLevel, ","), limit,
-		)
+		arg := map[string]interface{}{
+			"end_time":        endTime,
+			"condition_level": conditionLevel,
+			"limit":           limit,
+		}
+		query, args, err = sqlx.Named("SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ?"+
+			"	AND `timestamp` < :end_time"+
+			"	AND `condition_level` IN(:condition_level)"+
+			"	ORDER BY `timestamp` DESC"+
+			"	LIMIT :limit", arg)
+		if err != nil {
+			return nil, fmt.Errorf("query builder error: %v", err)
+		}
+		query, args, err = sqlx.In(query, args...)
+		if err != nil {
+			return nil, fmt.Errorf("query builder error: %v", err)
+		}
 	} else {
-		err = db.Select(&conditions,
-			"SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ?"+
-				"	AND `timestamp` < ?"+
-				"	AND ? <= `timestamp`"+
-				"	AND `condition_level` IN(?)"+
-				"	ORDER BY `timestamp` DESC"+
-				"	LIMIT ?",
-			jiaIsuUUID, endTime, startTime, strings.Join(conditionLevel, ","), limit,
-		)
+		arg := map[string]interface{}{
+			"start_time":      startTime,
+			"end_time":        endTime,
+			"condition_level": conditionLevel,
+			"limit":           limit,
+		}
+		query, args, err = sqlx.Named("SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ?"+
+			"	AND `timestamp` < :end_time"+
+			"	AND :start_time <= `timestamp`"+
+			"	AND `condition_level` IN(:condition_level)"+
+			"	ORDER BY `timestamp` DESC"+
+			"	LIMIT :limit", arg)
+		if err != nil {
+			return nil, fmt.Errorf("query builder error: %v", err)
+		}
+		query, args, err = sqlx.In(query, args...)
+		if err != nil {
+			return nil, fmt.Errorf("query builder error: %v", err)
+		}
 	}
+	fmt.Println(query, args)
+	err = db.Select(&conditions, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("db error: %v", err)
 	}
