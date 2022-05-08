@@ -262,9 +262,9 @@ func main() {
 		return
 	}
 
-	if err := initializeWarmCache(); err != nil {
-		panic(err)
-	}
+	//if err := initializeWarmCache(); err != nil {
+	//	panic(err)
+	//}
 
 	serverPort := fmt.Sprintf(":%v", getEnv("SERVER_APP_PORT", "3000"))
 	e.Logger.Fatal(e.Start(serverPort))
