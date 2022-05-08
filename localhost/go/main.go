@@ -279,7 +279,14 @@ func initializeWarmCache() {
 		if err != nil {
 			panic(err)
 		}
-		if _, err := f.Write(isu.Image); err != nil {
+		image := isu.Image
+		if len(image) == 0 {
+			image, err = ioutil.ReadFile(defaultIconFilePath)
+			if err != nil {
+				panic(err)
+			}
+		}
+		if _, err := f.Write(image); err != nil {
 			panic(err)
 		}
 		f.Close()
@@ -751,7 +758,7 @@ func getIsuIcon(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	  c.Response().Header().Set(echo.HeaderContentType, "image/jpeg")
+	c.Response().Header().Set(echo.HeaderContentType, "image/jpeg")
 	return c.Blob(http.StatusOK, "", image)
 }
 
