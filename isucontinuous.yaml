@@ -27,10 +27,12 @@ hosts:
       compile: /home/isucon/local/go/bin/go build .
     - src: sql
       target: /home/isucon/webapp/sql
+    - src: envfile
+      target: /home/isucon/env.sh
 
   profiling: &profiling
     command: >-
-      PPROF_TMPDIR=/pprof/{{.Git.Revision}} /home/isucon/local/go/bin/go tool pprof /home/isucon/webapp/go/isucondition http://localhost:6060/debug/pprof/profile?seconds=90
+      PPROF_TMPDIR=/pprof/{{.Git.Revision}} /home/isucon/local/go/bin/go tool pprof /home/isucon/webapp/go/isucondition http://localhost:6060/debug/pprof/profile?seconds=70
   after_bench:
     target: /profile/{{.Git.Revision}}/
     command: >-
@@ -46,27 +48,26 @@ hosts:
   user: *user
   key: *key
   deploy: *deploy
-  profiling: *profiling
+  #profiling: *profiling
   after_bench:
     target: /profile/{{.Git.Revision}}/
-    #command: >-
-    #  mkdir -p /profile/{{.Git.Revision}};
-    #  export PPROF_FILENAME=$(ls /pprof/{{.Git.Revision}}/ -tr | tail -n1);
-    #  if [ -f "/pprof/{{.Git.Revision}}/$PPROF_FILENAME" ]; then
-    #    /home/isucon/local/go/bin/go tool pprof -top -cum /pprof/{{.Git.Revision}}/$PPROF_FILENAME > /profile/{{.Git.Revision}}/pprof_top_cum;
-    #  fi;
+  #  command: >-
+  #    mkdir -p /profile/{{.Git.Revision}};
+  #    export PPROF_FILENAME=$(ls /pprof/{{.Git.Revision}}/ -tr | tail -n1);
+  #    if [ -f "/pprof/{{.Git.Revision}}/$PPROF_FILENAME" ]; then
+  #      /home/isucon/local/go/bin/go tool pprof -top -cum /pprof/{{.Git.Revision}}/$PPROF_FILENAME > /profile/{{.Git.Revision}}/pprof_top_cum;
+  #    fi;
 
 - host: isucondition-3.t.isucon.dev
   user: *user
   key: *key
   deploy: *deploy
-  profiling: *profiling
+  #profiling: *profiling
   after_bench:
     target: /profile/{{.Git.Revision}}/
-    #command: >-
-    #  mkdir -p /profile/{{.Git.Revision}};
-    #  export PPROF_FILENAME=$(ls /pprof/{{.Git.Revision}}/ -tr | tail -n1);
-    #  if [ -f "/pprof/{{.Git.Revision}}/$PPROF_FILENAME" ]; then
-    #    /home/isucon/local/go/bin/go tool pprof -top -cum /pprof/{{.Git.Revision}}/$PPROF_FILENAME > /profile/{{.Git.Revision}}/pprof_top_cum;
-    #  fi;
-
+  #  command: >-
+  #    mkdir -p /profile/{{.Git.Revision}};
+  #    export PPROF_FILENAME=$(ls /pprof/{{.Git.Revision}}/ -tr | tail -n1);
+  #    if [ -f "/pprof/{{.Git.Revision}}/$PPROF_FILENAME" ]; then
+  #      /home/isucon/local/go/bin/go tool pprof -top -cum /pprof/{{.Git.Revision}}/$PPROF_FILENAME > /profile/{{.Git.Revision}}/pprof_top_cum;
+  #    fi;
