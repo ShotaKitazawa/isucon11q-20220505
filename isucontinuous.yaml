@@ -80,4 +80,4 @@ hosts:
     target: /profile/{{.Git.Revision}}/
     command: >-
       mkdir -p /profile/{{.Git.Revision}};
-      cat "{{.Env.SLOWLOG_PATH}}" | docker run -i --rm matsuu/pt-query-digest > /profile/{{.Git.Revision}}/slowlog;
+      cat "{{.Env.SLOWLOG_PATH}}" | tail -n 5000000 |  docker run -i --rm matsuu/pt-query-digest > /profile/{{.Git.Revision}}/slowlog;
