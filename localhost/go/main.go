@@ -1184,7 +1184,7 @@ func getTrend(c echo.Context) error {
 		for _, isu := range isuList {
 			conditions := []IsuCondition{}
 			err = db.Select(&conditions,
-				"SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ? ORDER BY timestamp DESC",
+				"SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ? ORDER BY timestamp DESC LIMIT 1",
 				isu.JIAIsuUUID,
 			)
 			if err != nil {
@@ -1194,22 +1194,21 @@ func getTrend(c echo.Context) error {
 
 			if len(conditions) > 0 {
 				isuLastCondition := conditions[0]
-				conditionLevel, err := calculateConditionLevel(isuLastCondition.Condition)
-				if err != nil {
-					c.Logger().Error(err)
-					return c.NoContent(http.StatusInternalServerError)
-				}
 				trendCondition := TrendCondition{
 					ID:        isu.ID,
 					Timestamp: isuLastCondition.Timestamp.Unix(),
 				}
-				switch conditionLevel {
+				switch isuLastCondition.ConditionLevel {
 				case "info":
 					characterInfoIsuConditions = append(characterInfoIsuConditions, &trendCondition)
 				case "warning":
 					characterWarningIsuConditions = append(characterWarningIsuConditions, &trendCondition)
 				case "critical":
 					characterCriticalIsuConditions = append(characterCriticalIsuConditions, &trendCondition)
+				default:
+					c.Logger().Error(fmt.Errorf("isu_condition (id: %d) is unsupported conditionLevel: %s",
+						isuLastCondition.ID, isuLastCondition.ConditionLevel))
+					return c.NoContent(http.StatusInternalServerError)
 				}
 			}
 
