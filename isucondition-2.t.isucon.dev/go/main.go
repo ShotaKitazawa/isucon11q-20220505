@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/felixge/fgprof"
@@ -207,6 +208,8 @@ func init() {
 	if err != nil {
 		log.Fatalf("failed to parse ECDSA public key: %v", err)
 	}
+
+	go bulkInsert()
 }
 
 func main() {
@@ -1237,9 +1240,15 @@ func getTrend(c echo.Context) error {
 	return c.JSON(http.StatusOK, res)
 }
 
+var (
+	conditionCache      []string
+	conditionCacheMutex sync.RWMutex
+)
+
 // POST /api/condition/:jia_isu_uuid
 // ISUからのコンディションを受け取る
 func postIsuCondition(c echo.Context) error {
+
 	jiaIsuUUID := c.Param("jia_isu_uuid")
 	if jiaIsuUUID == "" {
 		return c.String(http.StatusBadRequest, "missing: jia_isu_uuid")
@@ -1253,15 +1262,8 @@ func postIsuCondition(c echo.Context) error {
 		return c.String(http.StatusBadRequest, "bad request body")
 	}
 
-	tx, err := db.Beginx()
-	if err != nil {
-		c.Logger().Errorf("db error: %v", err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
-	defer tx.Rollback()
-
 	var count int
-	err = tx.Get(&count, "SELECT COUNT(*) FROM `isu` WHERE `jia_isu_uuid` = ?", jiaIsuUUID)
+	err = db.Get(&count, "SELECT COUNT(*) FROM `isu` WHERE `jia_isu_uuid` = ?", jiaIsuUUID)
 	if err != nil {
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
@@ -1289,22 +1291,32 @@ func postIsuCondition(c echo.Context) error {
 		values = append(values, fmt.Sprintf(`("%s", "%s", %d, "%s", "%s", "%s")`, jiaIsuUUID, timestampStr, isSittingNum, cond.Condition, conditionLevel, cond.Message))
 	}
 
-	_, err = tx.Exec(
-		"INSERT INTO `isu_condition`" +
-			"	(`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`)" +
-			"	VALUES " + strings.Join(values, ","))
-	if err != nil {
-		c.Logger().Errorf("db error: %v", err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		c.Logger().Errorf("db error: %v", err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
+	conditionCacheMutex.Lock()
+	conditionCache = append(conditionCache, values...)
+	conditionCacheMutex.Unlock()
 
 	return c.NoContent(http.StatusAccepted)
+}
+
+func bulkInsert() {
+	t := time.Tick(time.Second)
+	for {
+		select {
+		case <-t:
+			conditionCacheMutex.Lock()
+			c := conditionCache
+			conditionCache = []string{}
+			conditionCacheMutex.Unlock()
+			if len(c) != 0 {
+				if _, err := db.Exec(
+					"INSERT INTO `isu_condition`" +
+						"	(`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`)" +
+						"	VALUES " + strings.Join(c, ",")); err != nil {
+					log.Errorf("bulkInsert: db error: %v", err)
+				}
+			}
+		}
+	}
 }
 
 // ISUのコンディションの文字列がcsv形式になっているか検証
